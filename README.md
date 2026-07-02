@@ -1,39 +1,63 @@
-# Trading Bot for Binance Futures Testnet
+# Binance Futures Testnet Trading Bot
 
-Small Python bot I threw together for placing orders on Binance Futures Testnet. Does what it says — market, limit, and stop-limit orders via CLI. Nothing fancy, just works.
+A command-line application to place MARKET and LIMIT orders on Binance Futures Testnet (USDT-M).
 
-## Before You Start
+## Prerequisites
 
-1. Head over to https://testnet.binancefuture.com and create an account if you haven't already. It's the testnet, so don't worry about real money.
-2. Once logged in, generate an API key and secret from the API Management section. Copy both somewhere safe.
-3. Set them as environment variables in your terminal:
+- Python 3.x installed
+- A Binance Futures Testnet account (register at https://testnet.binancefuture.com)
+- API Key and Secret generated from the testnet dashboard
+
+## Setup
+
+Set your API credentials as environment variables:
 
 ```powershell
-$env:BINANCE_API_KEY="paste_your_key_here"
-$env:BINANCE_API_SECRET="paste_your_secret_here"
+$env:BINANCE_API_KEY="your_api_key_here"
+$env:BINANCE_API_SECRET="your_api_secret_here"
 ```
 
-4. Install the only dependency:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## How to Use
+## Usage
 
-Open a terminal and run:
+You can pass arguments directly or run without arguments for interactive mode.
+
+### Command-line mode
 
 ```bash
+# Market Buy
 python cli.py BTCUSDT BUY MARKET 0.001
+
+# Limit Sell
 python cli.py BTCUSDT SELL LIMIT 0.001 60000
-python cli.py BTCUSDT BUY STOP_LIMIT 0.001 51000 50500
 ```
 
-The pattern is: `python cli.py <symbol> <side> <type> <quantity> [price] [stop_price]`
+### Interactive mode
 
-Price is mandatory for LIMIT and STOP_LIMIT orders. Stop price is only needed for STOP_LIMIT.
+```bash
+python cli.py
+```
 
-## What You'll See
+This will prompt you for each input step by step with validation.
+
+### Arguments
+
+| Position | Name       | Required For        | Description                    |
+|----------|------------|---------------------|--------------------------------|
+| 1        | symbol     | All                 | Trading pair (e.g. BTCUSDT)    |
+| 2        | side       | All                 | BUY or SELL                    |
+| 3        | type       | All                 | MARKET or LIMIT                |
+| 4        | quantity   | All                 | Order quantity in base asset   |
+| 5        | price      | LIMIT               | Limit price in quote asset     |
+
+### Output
+
+The bot prints a summary of your request followed by the API response showing order ID, status, executed quantity, and average price.
 
 ```
 ==================================================
@@ -55,31 +79,36 @@ SUCCESS - Order placed successfully!
 ==================================================
 ```
 
-If something's wrong (bad input, API error, network timeout), it'll tell you what happened instead of crashing silently.
-
 ## Project Structure
 
 ```
 trading_bot/
   bot/
-    client.py          # Talks to Binance API, handles auth & signing
-    orders.py          # Decides what to send based on order type
-    validators.py      # Checks if your inputs make sense
-    logging_config.py  # Sets up logging to file + console
-  cli.py               # You interact with this
+    client.py          # API client with HMAC authentication
+    orders.py          # Order placement logic
+    validators.py      # Input validation helpers
+    logging_config.py  # Logging setup
+  cli.py               # Entry point (argparse with interactive fallback)
   logs/
-    trading_bot.log    # Gets created automatically when you run the bot
+    trading_bot.log    # Generated on each run
   README.md
   requirements.txt
 ```
 
-## Things I Assumed
+## Logging
 
-- You're using USDT-M Futures Testnet (not coin-margined or spot)
-- Quantity is in the base asset — so for BTCUSDT you type 0.001 (meaning 0.001 BTC)
-- Limit orders use Good-Till-Cancelled time-in-force (sits there until filled or you cancel)
-- Stop-limit uses Binance's `STOP` order type under the hood
+All API requests, responses, and errors are logged to `logs/trading_bot.log` with timestamps and log levels. Console output shows INFO level while the file captures DEBUG level details including raw API responses.
 
-## Why I Didn't Use python-binance
+## Error Handling
 
-Could've gone with the library but decided to keep it lightweight. Only dependency is `requests` — no bloated third-party SDKs to worry about. HMAC signing is straightforward anyway.
+- Invalid inputs (bad symbol, non-numeric quantity, etc.) are caught and reported before any API call
+- API errors return the error code and message from Binance
+- Network timeouts and connection failures are handled gracefully
+- Each error is logged to the file with stack trace
+
+## Assumptions
+
+- Using USDT-M Futures Testnet
+- Quantity is in the base asset (e.g., BTC for BTCUSDT)
+- LIMIT orders use Good-Till-Cancelled (GTC) time in force
+- The testnet account has sufficient balance to place orders

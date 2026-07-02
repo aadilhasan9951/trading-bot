@@ -22,6 +22,7 @@ class BinanceFuturesClient:
             "Content-Type": "application/x-www-form-urlencoded",
         })
 
+    # Build HMAC-SHA256 signature from sorted query string
     def _sign(self, query_string: str) -> str:
         return hmac.new(
             self.api_secret.encode("utf-8"),
@@ -34,39 +35,42 @@ class BinanceFuturesClient:
         params = kwargs.pop("params", {}) or {}
 
         if signed:
+            # Binance requires timestamp and recvWindow for authenticated requests
             params["timestamp"] = int(time.time() * 1000)
             params["recvWindow"] = 60000
+            # Sort params alphabetically before signing (Binance requirement)
             query_string = urlencode(sorted(params.items()))
             signature = self._sign(query_string)
             full_url = f"{url}?{query_string}&signature={signature}"
         else:
             full_url = url
 
-        logger.debug("Request: %s %s", method, full_url)
+        logger.debug(f"Request: {method} {full_url}")
 
         try:
             resp = self.session.request(method, full_url, timeout=10)
-        except requests.exceptions.Timeout as e:
-            logger.error("Request timed out: %s", e)
-            raise ConnectionError("Request timed out")
+        except requests.exceptions.Timeout:
+            logger.error("Request timed out")
+            raise ConnectionError("Request timed out - check your network")
         except requests.exceptions.ConnectionError as e:
-            logger.error("Connection error: %s", e)
-            raise ConnectionError(f"Failed to connect: {e}")
+            logger.error(f"Connection failed: {e}")
+            raise ConnectionError(f"Could not connect to Binance API: {e}")
 
-        logger.debug("Response: %s %s", resp.status_code, resp.text)
+        logger.debug(f"Response: {resp.status_code} {resp.text[:500]}")
 
         if resp.status_code != 200:
             try:
                 body = resp.json()
-                msg = body.get("msg", "Unknown error")
+                msg = body.get("msg", "Unknown API error")
                 code = body.get("code", -1)
             except Exception:
-                msg = resp.text
+                msg = resp.text[:200]
                 code = -1
-            logger.error("API error %s: %s", code, msg)
+            logger.error(f"API error {code}: {msg}")
             raise Exception(f"API error ({code}): {msg}")
 
         return resp.json()
 
     def place_order(self, **params) -> dict[str, Any]:
+        logger.debug(f"Place order params: {params}")
         return self._request("POST", "/fapi/v1/order", signed=True, params=params)
